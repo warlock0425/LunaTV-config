@@ -164,7 +164,7 @@ const API_SITES = {
     },
     lovedannet: {
       name: '🎬艾旦影视',
-      api: 'https://pz.v88.qzz.io/?url=https://lovedan.net/api.php/provide/vod',
+      api: 'https://pz.berserk.qzz.io/?url=https://lovedan.net/api.php/provide/vod',
       detail: 'https://lovedan.net',
     },
     91mdme: {

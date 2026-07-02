@@ -14,14 +14,14 @@ https://berserker8888.github.io/LunaTV-config
 👉 Base58编码订阅链接[精简版🎬源链接](https://raw.githubusercontent.com/Berserker8888/LunaTV-config/refs/heads/main/jin18.txt)    （推荐使用自己部署的代理）精简版禁18源
 
 ```bash
-https://pz.v88.qzz.io?format=2&source=jin18
+https://pz.berserk.qzz.io?format=2&source=jin18
 ```
 ```bash
 https://raw.githubusercontent.com/Berserker8888/LunaTV-config/refs/heads/main/jin18.txt
 ```
 👉 Base58编码订阅链接[精简版🎬+🔞源链接](https://raw.githubusercontent.com/Berserker8888/LunaTV-config/refs/heads/main/jingjian.txt) （推荐使用自己部署的代理）精简版剔除无搜索结果和污染搜索结果源                             
 ```bash
-https://pz.v88.qzz.io?format=2&source=jingjian
+https://pz.berserk.qzz.io?format=2&source=jingjian
 ```
 ```bash
 https://raw.githubusercontent.com/Berserker8888/LunaTV-config/refs/heads/main/jingjian.txt
@@ -29,7 +29,7 @@ https://raw.githubusercontent.com/Berserker8888/LunaTV-config/refs/heads/main/ji
 
 👉 Base58编码订阅链接[完整版🎬+🔞源链接](https://raw.githubusercontent.com/Berserker8888/LunaTV-config/refs/heads/main/LunaTV-config.txt) （推荐使用自己部署的代理）                          
 ```bash
-https://pz.v88.qzz.io?format=2&source=full
+https://pz.berserk.qzz.io?format=2&source=full
 ```
 ```bash
 https://raw.githubusercontent.com/Berserker8888/LunaTV-config/refs/heads/main/LunaTV-config.txt
@@ -379,7 +379,7 @@ console.log(`Request from: ${request.headers.get('cf-connecting-ip')}`)
 | ✅ | 🎬电影天堂 | [Link](http://caiji.dyttzyapi.com) | [Link](http://caiji.dyttzyapi.com/api.php/provide/vod) | ❌ | 30 | 0 | 100.0% | ✅✅✅✅✅✅✅ |
 | ✅ | 🎬红牛资源 | [Link](https://www.hongniuzy.com) | [Link](https://www.hongniuzy2.com/api.php/provide/vod) | ✅ | 30 | 0 | 100.0% | ✅✅✅✅✅✅✅ |
 | ✅ | 🎬索尼资源 | [Link](https://suonizy.net) | [Link](https://suoniapi.com/api.php/provide/vod) | ❌ | 30 | 0 | 100.0% | ✅✅✅✅✅✅✅ |
-| ✅ | 🎬艾旦影视 | [Link](https://lovedan.net) | [Link](https://pz.v88.qzz.io/?url=https://lovedan.net/api.php/provide/vod) | ✅ | 29 | 0 | 100.0% | ✅✅-✅✅✅✅ |
+| ✅ | 🎬艾旦影视 | [Link](https://lovedan.net) | [Link](https://pz.berserk.qzz.io/?url=https://lovedan.net/api.php/provide/vod) | ✅ | 29 | 0 | 100.0% | ✅✅-✅✅✅✅ |
 | ✅ | 🎬虎牙资源 | [Link](https://www.huyaapi.com) | [Link](https://www.huyaapi.com/api.php/provide/vod) | ✅ | 30 | 0 | 100.0% | ✅✅✅✅✅✅✅ |
 | ✅ | 🎬豪华资源 | [Link](https://www.haohuazy.com) | [Link](https://hhzyapi.com/api.php/provide/vod) | ✅ | 6 | 0 | 100.0% | -✅✅✅✅✅✅ |
 | ✅ | 🎬量子影视 | [Link](https://lzizy.net) | [Link](https://cj.lziapi.com/api.php/provide/vod) | ✅ | 30 | 0 | 100.0% | ✅✅✅✅✅✅✅ |
@@ -424,7 +424,7 @@ console.log(`Request from: ${request.headers.get('cf-connecting-ip')}`)
 | ✅ | 🔞黑料资源 | [Link](https://heiliaozy.cc) | [Link](https://www.heiliaozyapi.com/api.php/provide/vod) | ✅ | 30 | 0 | 100.0% | ✅✅✅✅✅✅✅ |
 | ✅ | 🎬iKun资源 | [Link](https://ikunzy.com) | [Link](https://ikunzyapi.com/api.php/provide/vod) | ✅ | 29 | 1 | 96.7% | ✅✅✅✅✅✅✅ |
 | ✅ | 🎬速播资源 | [Link](https://www.subozy.com) | [Link](https://subocaiji.com/api.php/provide/vod) | ✅ | 29 | 1 | 96.7% | ✅✅✅✅✅✅✅ |
-| ✅ | 🎬百度云zy | [Link](https://bdzy1.com) | [Link](https://pz.v88.qzz.io/?url=https://api.apibdzy.com/api.php/provide/vod) | ✅ | 28 | 1 | 96.6% | ✅✅-✅✅✅✅ |
+| ✅ | 🎬百度云zy | [Link](https://bdzy1.com) | [Link](https://pz.berserk.qzz.io/?url=https://api.apibdzy.com/api.php/provide/vod) | ✅ | 28 | 1 | 96.6% | ✅✅-✅✅✅✅ |
 | ✅ | 🔞鲨鱼资源 | [Link](https://shayuapi.com) | [Link](https://shayuapi.com/api.php/provide/vod) | ✅ | 27 | 3 | 90.0% | ✅✅✅✅✅✅✅ |
 | ✅ | 🔞黄色仓库 | [Link](https://hsckzy.xyz) | [Link](https://hsckzy.xyz/api.php/provide/vod) | ✅ | 27 | 3 | 90.0% | ✅✅✅✅✅✅✅ |
 | ✅ | 🎬茅台资源 | [Link](https://mtzy.me) | [Link](https://caiji.maotaizy.cc/api.php/provide/vod) | 无结果 | 25 | 5 | 83.3% | ✅✅✅❌✅✅✅ |
