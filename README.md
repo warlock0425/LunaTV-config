@@ -1,5 +1,5 @@
 # MoonTV/LunaTV 配置编辑器
-https://pz.berserk.qzz.io  
+https://berserker8888.github.io/LunaTV-config  
 
 --- 
 
