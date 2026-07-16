@@ -353,9 +353,9 @@ class GitHubAPI {
             
             const response = await fetch(url, {
                 headers: {
-                    'Authorization': `token ${githubToken}`,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'User-Agent': 'Luna-TV-Config-Editor/1.0'
+                    'Authorization': `Bearer ${githubToken}`,
+                    'Accept': 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2022-11-28'
                 }
             });
             
@@ -440,9 +440,9 @@ class GitHubAPI {
             const response = await fetch(url, {
                 method: 'PUT',
                 headers: {
-                    'Authorization': `token ${githubToken}`,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'User-Agent': 'Luna-TV-Config-Editor/1.0',
+                    'Authorization': `Bearer ${githubToken}`,
+                    'Accept': 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2022-11-28',
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -480,7 +480,7 @@ class GitHubAPI {
     
     static getErrorMessage(status) {
         const messages = {
-            401: 'Token验证失败，请检查Token权限是否包含repo访问权限',
+            401: 'Token验证失败，请检查是否具有本仓库 Contents 读写权限',
             403: 'API访问被拒绝，可能是访问频率限制',
             404: '文件未找到，请确认仓库和文件路径正确',
             422: '请求参数无效',

@@ -4,17 +4,34 @@ on:
   schedule:
     - cron: "0 17 * * *"  # 每天北京时间凌晨1点运行 (UTC 17点)
   push:
+    branches: [ main ]
     paths:
       - 'LunaTV-config.json'
+      - 'build-configs.js'
+      - 'encode.js'
+      - 'check_api.js'
+      - 'update_readme.js'
+      - 'verify.js'
+      - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
     inputs:
       api_name:
         description: '搜索关键字'
         default: 你好
+      check_quarantined:
+        description: '同时复查隔离来源'
+        type: boolean
+        default: false
+
+concurrency:
+  group: lunatv-config-build
+  cancel-in-progress: false
 
 jobs:
   build-check-encode:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     permissions:
       contents: write  # 允许推送
@@ -23,87 +40,52 @@ jobs:
       # 1️⃣ 检出仓库
       - uses: actions/checkout@v4
 
-      # 2️⃣ 安装系统依赖 & Node.js
+      # 2️⃣ 使用锁定版本安装 Node.js 依赖
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
       - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq curl
-          curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-          sudo apt-get install -y nodejs
-          npm install bs58 axios
+        run: npm ci
 
-      # 3️⃣ JSON 处理：生成 jingjian.json
-      - name: Generate jingjian.json (strip _comment)
-        run: |
-          jq '{
-            cache_time: .cache_time,
-            api_site: (
-              .api_site
-              | with_entries(select(.value._comment | not))
-            )
-          }' LunaTV-config.json > jingjian.json
+      # 3️⃣ 生成精简配置与 Base58
+      - name: Build subscriptions
+        run: npm run build
 
-      - name: Validate jingjian.json
-        run: jq empty jingjian.json
+      # 4️⃣ 验证 JSON、衍生档与脚本
+      - name: Verify generated files
+        run: npm test
 
-      # 4️⃣ JSON 处理：生成 jin18.json（去掉 adult）
-      - name: Generate jin18.json (strip adult resources)
-        run: |
-          jq '{
-            cache_time: .cache_time,
-            api_site: (
-              .api_site
-              | with_entries(select(.value.name | startswith("🔞") | not))
-            )
-          }' jingjian.json > jin18.json
-
-      - name: Validate jin18.json
-        run: jq empty jin18.json
-
-      # 5️⃣ Base58 编码
-      - name: Encode JSON to Base58
-        run: |
-          cat > encode.js <<'EOF'
-          const fs = require('fs');
-          const bs58 = require('bs58');
-
-          const files = [
-            { input: 'LunaTV-config.json', output: 'LunaTV-config.txt' },
-            { input: 'jingjian.json', output: 'jingjian.txt' },
-            { input: 'jin18.json', output: 'jin18.txt' }
-          ];
-
-          files.forEach(file => {
-            if (!fs.existsSync(file.input)) return;
-            const data = fs.readFileSync(file.input);
-            const encoded = bs58.encode(Buffer.from(data));
-            fs.writeFileSync(file.output, encoded);
-          });
-          EOF
-
-          node encode.js
-
-      # 6️⃣ 运行 API 检查脚本
+      # 5️⃣ 运行 API 检查脚本
       - name: Run API check
         run: |
           API_NAME="${{ github.event.inputs.api_name || '你好' }}"
-          echo "检查 API: $API_NAME"
-          node check_api.js "$API_NAME"
+          CHECK_QUARANTINED="${{ github.event.inputs.check_quarantined || 'false' }}"
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$(date -u +%u)" = "7" ]; then
+            CHECK_QUARANTINED=true
+          fi
+          echo "检查 API: $API_NAME（复查隔离来源: $CHECK_QUARANTINED）"
+          CHECK_QUARANTINED="$CHECK_QUARANTINED" npm run check:api -- "$API_NAME"
 
-      # 7️⃣ 更新 README 或报告
+      # 6️⃣ 更新 README 或报告
       - name: Update report
-        run: node update_readme.js
+        run: npm run update:readme
 
-      # 8️⃣ 提交并推送所有生成文件（优化版）
+      # 7️⃣ 提交并推送所有生成文件
       - name: Commit and push all generated files
         run: |
           # 配置 Git
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 拉取远程 main 分支，避免冲突
+          # 若检测期间远端已有新提交则安全退出，避免提交过期报告
           git fetch origin main
-          git reset --soft origin/main
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+            echo "远端 main 已更新，请重新运行工作流程"
+            exit 1
+          fi
 
           # 添加所有生成文件
           git add jingjian.json jin18.json LunaTV-config.txt jingjian.txt jin18.txt report.md README.md
@@ -112,6 +94,6 @@ jobs:
           git commit -m "自动更新 JSON、Base58 和 API 报告 ($(date -d '+8 hour' +'%Y-%m-%d %H:%M:%S CST'))" || echo "⚠️ 没有文件变化可提交"
 
           # 推送到远程 main
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
+          git push origin HEAD:main
 
 

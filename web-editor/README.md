@@ -14,7 +14,7 @@
 ### 🔄 GitHub集成
 - **同步加载**: 直接从GitHub仓库加载配置文件
 - **安全保存**: 通过GitHub API安全保存到仓库
-- **Token管理**: 安全的Token存储和管理
+- **Token管理**: 当前页面内存管理与手动清除
 - **版本控制**: 自动生成提交信息和版本历史
 
 ### 👁️ 可视化功能
@@ -41,10 +41,10 @@
 ## 🚀 使用方法
 
 ### 1. 获取GitHub Token
-1. 访问 [GitHub Settings → Personal access tokens](https://github.com/settings/tokens)
-2. 点击 "Generate new token (classic)"
-3. 选择 `repo` 权限
-4. 复制生成的Token
+1. 访问 [GitHub Settings → Fine-grained personal access tokens](https://github.com/settings/personal-access-tokens)
+2. 仅选择 `Berserker8888/LunaTV-config` 仓库
+3. 将 Repository permissions → Contents 设置为 `Read and write`
+4. 设置较短的有效期限并复制生成的 Token
 
 ### 2. 开始使用
 1. 在编辑器中输入您的GitHub Token
@@ -55,17 +55,16 @@
 ## 🛠️ 技术特性
 
 - **现代化UI**: 基于CSS Grid和Flexbox的响应式设计
-- **PWA支持**: 渐进式Web应用特性
-- **TypeScript风格**: 严格的类型检查和错误处理
+- **JSON验证**: 保存前检查 JSON 格式，避免提交无法解析的配置
 - **模块化架构**: 清晰的代码组织和功能分离
 - **国际化**: 完整的中文界面和错误提示
 
 ## 🔒 安全特性
 
-- **Token加密**: 本地Token采用简单加密存储
-- **自动过期**: Token自动过期机制（7天）
-- **会话隔离**: Token仅在当前会话有效
-- **手动清除**: 随时清除本地存储的Token
+- **最小权限**: 建议使用仅限本仓库 Contents 读写权限的细粒度 Token
+- **不持久化**: 页面脚本只将 Token 保存在当前页面内存；是否记忆由浏览器密码管理器决定
+- **手动清除**: 可随时清除当前页面中的 Token
+- **提交保护**: 使用 GitHub 文件 SHA 防止无意覆盖已被他人更新的版本
 
 ## 📱 浏览器兼容性
 

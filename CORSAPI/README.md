@@ -1,6 +1,6 @@
 # API 代理 & JSON 订阅器
 
-这是一个基于 **Cloudflare Workers** 的中转代理 + JSON 配置前缀替换工具。
+这是一个基于 **Cloudflare Workers** 的来源白名单代理 + JSON 配置前缀替换工具。
 
 支持将 API 请求通过 Worker 转发，并自动为 JSON 配置中的 `api` 字段添加/替换前缀。
 
@@ -10,9 +10,9 @@
 
 ## ✨ 功能特性
 
-### 1. 通用 API 代理
+### 1. 配置来源 API 代理
 
-使用 `?url=` 参数转发任意 API 请求
+使用 `?url=` 参数转发配置中已登记的 API 请求。默认仅允许 `GET`、`HEAD` 与 `OPTIONS`，并阻挡本机及私有网络地址。
 
 **示例：**
 
@@ -24,9 +24,9 @@ https://<你的域名>/?url=https://ikunzyapi.com/api.php/provide/vod/
 
 使用 `?source=` 参数选择不同的资源配置：
 
-- **`source=jin18`** - 精简版（31个资源，仅普通内容）
-- **`source=jingjian`** - 精简+成人版（61个资源）
-- **`source=full`** - 完整版（88个资源，**默认**）
+- **`source=jin18`** - 精简版（27个资源，仅普通内容）
+- **`source=jingjian`** - 精简+成人版（48个资源）
+- **`source=full`** - 完整版（72个资源，**默认**）
 
 ### 3. 统一的 format 参数
 
@@ -47,7 +47,7 @@ https://<你的域名>/?format=1&source=jin18
 https://<你的域名>/?format=3&source=full
 ```
 
-### 5. 动态示例生成
+### 4. 动态示例生成
 
 HTML 页面会根据当前域名自动生成示例链接，无需手动修改
 
@@ -57,10 +57,11 @@ HTML 页面会根据当前域名自动生成示例链接，无需手动修改
 
 1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com)
 2. 新建一个 **Workers & Pages → Worker**
-3. 将 `worker.js` 代码粘贴到编辑器中
+3. 将 `_worker.js` 代码粘贴到编辑器中
 4. 保存并部署
-5. 在 Cloudflare Workers KV 中创建命名空间：名称：CONFIG_KV,绑定变量名：CONFIG_KV
-6. 绑定自定义域名（可选）
+5. 在 Cloudflare Workers KV 中创建命名空间并绑定为 `CONFIG_KV`（可选，但建议启用缓存）
+6. 如需代理配置以外的来源，设置 `PROXY_ALLOWED_HOSTS` 环境变量，使用逗号分隔域名，例如 `api.example.com,*.example.net`
+7. 绑定自定义域名（可选）
 
 ---
 
@@ -68,7 +69,7 @@ HTML 页面会根据当前域名自动生成示例链接，无需手动修改
 
 假设你的 Worker 部署在：[`https://api.example.workers.dev`](https://api.example.workers.dev)
 
-### 示例 1：代理任意 API
+### 示例 1：代理配置中的 API
 
 ```
 https://api.example.workers.dev/?url=https://ikunzyapi.com/api.php/provide/vod/
@@ -110,11 +111,10 @@ https://api.example.workers.dev/?format=1&source=full&prefix=https://my-proxy.co
 
 | 参数     | 说明             | 可选值                          | 示例         |        
 | -------- | ---------------- | ------------------------------- | ------------ |
-| `url`    | 代理任意 API 请求 | 任意有效 URL                     | `?url=https://...` |
+| `url`    | 代理白名单 API 请求 | 配置内来源或 `PROXY_ALLOWED_HOSTS` 中的 HTTP(S) URL | `?url=https://...` |
 | `format` | 配置模式         | `0 或 raw = 原始 JSON`  `1 或 proxy = 添加代理前缀`  `2 或 base58 = 原始 Base58`  `3 或 proxy-base58 = 代理 Base58` | `?format=0` |
 | `source` | 配置源选择       | `jin18` = 精简版`jingjian` = 精简+成人`full` = 完整版） | `?source=jin18` |
 | `prefix` | 自定义代理前缀   | 任意代理地址                      | `?prefix=https://.../?url=` |
-| `errors&limit=10` | 查看错误日志 | `errors&limit=10`                 | `https://<你的域名>?errors&limit=10` |
 
 ---
 
@@ -122,9 +122,9 @@ https://api.example.workers.dev/?format=1&source=full&prefix=https://my-proxy.co
 
 | 配置源 | 资源数量 | 包含成人内容 | 适用场景 |
 | --- | --- | --- | --- |
-| **jin18** | 31个 | ❌ 否 | 家庭使用、轻量级应用 |
-| **jingjian** | 61个 | ✅ 是 | 个人使用、中等需求 |
-| **full** | 88个 | ✅ 是 | 完整功能、最大兼容性 |
+| **jin18** | 27个 | ❌ 否 | 家庭使用、轻量级应用 |
+| **jingjian** | 48个 | ✅ 是 | 个人使用、中等需求 |
+| **full** | 72个 | ✅ 是 | 完整功能、最大兼容性 |
 
 ---
 
@@ -187,9 +187,10 @@ https://<你的域名>/?format=3&source=full
 - **Workers 免费额度**：每天 10 万次请求，适合轻量使用。超出后需升级付费套餐。
 - **代理替换逻辑**：如果 JSON 中 `api` 字段已包含 `?url=` 前缀，会先去掉旧前缀，再加上新前缀。
 - **Base58 输出**：适合直接作为订阅链接在支持该格式的客户端中使用。
-- **配置源更新**：配置源来自 GitHub，内容会定期更新。Worker 会缓存 7200 秒（2小时）。
+- **配置源更新**：配置源来自 GitHub；启用 KV 时 Worker 快取为 1800 秒（30 分钟），配置内的 `cache_time: 7200` 是客户端建议刷新周期。
 - **超时设置**：默认请求超时时间为 9 秒，超时后会返回错误信息。
-- **CORS 支持**：已启用完整的 CORS 支持，可直接在前端应用中调用。
+- **代理限制**：默认只允许配置内已登记的来源、标准 HTTP(S) 端口及安全请求头；不建议将 `PROXY_ALLOWED_HOSTS` 设置为 `*`。
+- **CORS 支持**：已启用 GET/HEAD 读取所需的 CORS 支持，可直接在前端应用中调用。
 
 ---
 
@@ -197,7 +198,7 @@ https://<你的域名>/?format=3&source=full
 
 ### 修改配置源地址
 
-在 `worker.js` 中找到 `JSON_SOURCES` 对象并修改：
+在 `_worker.js` 中找到 `JSON_SOURCES` 对象并修改：
 
 ```jsx
 const JSON_SOURCES = {
@@ -214,6 +215,10 @@ const JSON_SOURCES = {
 ```jsx
 const timeoutId = setTimeout(() => controller.abort(), 9000) // 改为其他值
 ```
+
+### 扩充代理来源白名单
+
+在 Worker 环境变量中设置 `PROXY_ALLOWED_HOSTS`，多个规则以逗号分隔，并支持 `*.example.com` 形式的子域名规则。设置为 `*` 会恢复任意公网主机代理，不建议用于公开服务。
 
 ### 添加访问日志
 

@@ -53,9 +53,9 @@ https://raw.githubusercontent.com/Berserker8888/LunaTV-config/refs/heads/main/Lu
   
 # 
 
-### 1. 通用 API 代理
+### 1. 配置来源 API 代理
 
-使用 `?url=` 参数转发任意 API 请求
+使用 `?url=` 参数转发配置中已登记的 API 请求。默认仅允许 `GET`、`HEAD` 与 `OPTIONS`，并阻挡本机及私有网络地址。
 
 **示例：**
 
@@ -67,9 +67,9 @@ https://<你的域名>/?url=https://ikunzyapi.com/api.php/provide/vod/
 
 使用 `?source=` 参数选择不同的资源配置：
 
-- **`source=jin18`** - 精简版（31个资源，仅普通内容）
-- **`source=jingjian`** - 精简+成人版（61个资源）
-- **`source=full`** - 完整版（88个资源，**默认**）
+- **`source=jin18`** - 精简版（27个资源，仅普通内容）
+- **`source=jingjian`** - 精简+成人版（48个资源）
+- **`source=full`** - 完整版（72个资源，**默认**）
 
 ### 3. 统一的 format 参数
 
@@ -100,7 +100,8 @@ https://<你的域名>/?url=https://ikunzyapi.com/api.php/provide/vod/
 - 存储和数据库 → Workers KV → Ceate instance  → 命名空间名称（KV Namespaces） 创建一个新的命名空间。
 - 命名空间名称可自定义，例如：MyKVNamespace。
 - 在 Worker设置 绑定 → 添加绑定 → KV命名空间 → 添加绑定 → 变量名为：CONFIG_KV → 创建的KV命名空间 → 添加绑定 。
-6. 绑定自定义域名：打开 Worker 设置 → Triggers(域和路由) → 添加 → Custom Domains(自定义域名)，添加你的域名并保存。
+6. 如需代理配置外的来源，新增环境变量 `PROXY_ALLOWED_HOSTS`，以逗号分隔域名；默认会拒绝未登记来源。
+7. 绑定自定义域名：打开 Worker 设置 → Triggers(域和路由) → 添加 → Custom Domains(自定义域名)，添加你的域名并保存。
 
 📦 部署到 Cloudflare Pages
 
@@ -128,7 +129,7 @@ https://<你的域名>/?url=https://ikunzyapi.com/api.php/provide/vod/
 
 假设你的 Worker 部署在：[`https://api.example.workers.dev`](https://api.example.workers.dev)
 
-### 示例 1：代理任意 API
+### 示例 1：代理配置中的 API
 
 ```
 https://api.example.workers.dev/?url=https://ikunzyapi.com/api.php/provide/vod/
@@ -175,11 +176,10 @@ https://api.example.workers.dev/?format=1&source=full&prefix=https://my-proxy.co
   
 | 参数     | 说明             | 可选值                          | 示例         |        
 | -------- | ---------------- | ------------------------------- | ------------ |
-| `url`    | 代理任意 API 请求 | 任意有效 URL                     | `?url=https://...` |
+| `url`    | 代理白名单 API 请求 | 配置内来源或 `PROXY_ALLOWED_HOSTS` 中的 HTTP(S) URL | `?url=https://...` |
 | `format` | 配置模式         | `format=0 或 raw - 原始 JSON` <br> `format=1 或 proxy - 添加代理前缀` <br> `format=2 或 base58 - 原始 Base58` <br> `format=3 或 proxy-base58 - 代理 Base58` | `?format=0` |
 | `source` | 配置源选择       | `source=jin18` - 精简版 <br> `source=jingjian` - 精简+成人 <br> `source=full` - 完整版） | `?source=jin18` |
 | `prefix` | 自定义代理前缀   | 任意代理地址                      | `?prefix=https://.../?url=` |
-| `errors&limit=10` | 查看错误日志 | `errors&limit=10`                 | `https://<你的域名>?errors&limit=10` |
 
 ---  
 
@@ -187,9 +187,9 @@ https://api.example.workers.dev/?format=1&source=full&prefix=https://my-proxy.co
 
 | 配置源 | 资源数量 | 包含成人内容 | 适用场景 |
 | --- | --- | --- | --- |
-| **jin18** | 31个 | ❌ 否 | 家庭使用、轻量级应用 |
-| **jingjian** | 61个 | ✅ 是 | 个人使用、中等需求 |
-| **full** | 88个 | ✅ 是 | 完整功能、最大兼容性 |
+| **jin18** | 27个 | ❌ 否 | 家庭使用、轻量级应用 |
+| **jingjian** | 48个 | ✅ 是 | 个人使用、中等需求 |
+| **full** | 72个 | ✅ 是 | 完整功能、最大兼容性 |
 
 
 🧩 **前缀替换逻辑**  
@@ -267,9 +267,10 @@ https://<你的域名>/?format=3&source=full
 - **Workers 免费额度**：每天 10 万次请求，适合轻量使用。超出后需升级付费套餐。
 - **代理替换逻辑**：如果 JSON 中 `api` 字段已包含 `?url=` 前缀，会先去掉旧前缀，再加上新前缀。
 - **Base58 输出**：适合直接作为订阅链接在支持该格式的客户端中使用。
-- **配置源更新**：配置源来自 GitHub，内容会定期更新。Worker 会缓存 7200 秒（2小时）。
+- **配置源更新**：配置源来自 GitHub；启用 KV 时 Worker 快取为 1800 秒（30 分钟），配置内的 `cache_time: 7200` 是客户端建议刷新周期。
 - **超时设置**：默认请求超时时间为 9 秒，超时后会返回错误信息。
-- **CORS 支持**：已启用完整的 CORS 支持，可直接在前端应用中调用。
+- **代理限制**：默认只允许配置内已登记的来源、标准 HTTP(S) 端口及安全请求头；不建议将 `PROXY_ALLOWED_HOSTS` 设置为 `*`。
+- **CORS 支持**：已启用 GET/HEAD 读取所需的 CORS 支持，可直接在前端应用中调用。
 
 ---   
   
@@ -282,7 +283,7 @@ https://<你的域名>/?format=3&source=full
 
 ### 修改配置源地址
 
-在 `worker.js` 中找到 `JSON_SOURCES` 对象并修改：
+在 `_worker.js` 中找到 `JSON_SOURCES` 对象并修改：
 
 ```jsx
 const JSON_SOURCES = {
@@ -312,10 +313,28 @@ console.log(`Request from: ${request.headers.get('cf-connecting-ip')}`)
 
 ---
 
+## 🛠️ 本机维护
+
+需要 Node.js 20 或更新版本。首次检出后执行：
+
+```bash
+npm ci
+npm run build
+npm test
+```
+
+- `npm run build`：由完整配置生成 `jingjian.json`、`jin18.json` 与三份 Base58 订阅。
+- `npm test`：验证 JSON 结构、衍生文件一致性、Base58 内容及所有 JavaScript 语法。
+- `npm run check:api -- "你好"`：执行线上来源检查并更新 `report.md`。
+- 日常检查只统计 48 个启用来源；设置 `CHECK_QUARANTINED=true` 可同时复查 24 个隔离来源，排程每周自动复查一次。
+- `npm run update:readme`：把最新健康报告写入 README。
+
+---
+
 ## 🆕 更新内容
 
 - 📄 **Luna-TV配置编辑器**：专业的 JSON 配置文件可视化编辑器。  
-- 🔍 **自动检测API状态**：每 1 小时检测一次 API 可用性，并记录最近 100 次测试报告。  
+- 🔍 **自动检测API状态**：每天检测一次 API 可用性，并保留最近 30 天测试记录。
 - 🧩 **源名称前添加图标**：源名称前添加图标，方便区分。  
 - 🌐 **被墙资源自动中转**：为受限 API 提供 CF Worker 中转能力。  
 - 📄 **添加_comment参数**：为异常源添加_comment参数以方便维护,不影响正常使用!(2025.12.06)
@@ -330,7 +349,7 @@ console.log(`Request from: ${request.headers.get('cf-connecting-ip')}`)
 
 ### ⚙️ 精简版源更新
 - 去除污染源与无搜索结果源（如 🎬虎牙、🔞丝袜、🔞色猫）。  
-- 精简后共 **57 个可用源**，在中转代理下全部可访问。  
+- 当前 `jingjian` 为 **48 个来源**，无成人内容的 `jin18` 为 **27 个来源**。
 <details>
 <summary>示例</summary>
 <img width="1025" height="486" alt="61" src="https://github.com/user-attachments/assets/81c80108-7c03-4583-87ab-b7b57cdfd3bd" />

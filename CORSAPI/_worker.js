@@ -1,27 +1,42 @@
 // 统一入口：兼容 Cloudflare Workers 和 Pages Functions
 export default {
   async fetch(request, env, ctx) {
-    // Pages Functions 中 KV 需要从 env 中获取
-    if (env && env.KV && typeof globalThis.KV === 'undefined') {
-      globalThis.KV = env.KV
+    // 同时兼容文档中的 CONFIG_KV 与旧版 KV 绑定名称
+    const kvBinding = env?.CONFIG_KV || env?.KV
+    if (kvBinding && typeof globalThis.KV === 'undefined') {
+      globalThis.KV = kvBinding
     }
     
-    return handleRequest(request)
+    return handleRequest(request, env || {})
   }
 }
 
 // 常量配置（避免重复创建）
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Accept, Content-Type, Range, Authorization, Token, X-Requested-With',
   'Access-Control-Max-Age': '86400',
+  'Referrer-Policy': 'no-referrer',
+  'X-Content-Type-Options': 'nosniff',
 }
 
 const EXCLUDE_HEADERS = new Set([
   'content-encoding', 'content-length', 'transfer-encoding',
   'connection', 'keep-alive', 'set-cookie', 'set-cookie2'
 ])
+
+const FORWARDED_REQUEST_HEADERS = new Set([
+  'accept', 'accept-language', 'content-type', 'if-modified-since',
+  'if-none-match', 'range', 'user-agent',
+  'referer', 'origin', 'authorization', 'token', 'x-requested-with'
+])
+
+const CONFIG_CACHE_TTL_SECONDS = 1800
+const CONFIG_FETCH_TIMEOUT_MS = 8000
+const ALLOWED_HOSTS_CACHE_MS = 5 * 60 * 1000
+const MAX_REDIRECTS = 3
+let allowedHostsCache = { expiresAt: 0, hosts: null }
 
 const JSON_SOURCES = {
   'jin18': 'https://raw.githubusercontent.com/Berserker8888/LunaTV-config/refs/heads/main/jin18.json',
@@ -86,6 +101,18 @@ function addOrReplacePrefix(obj, newPrefix) {
 }
 
 // ---------- 安全版：KV 缓存 ----------
+async function fetchJson(url) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), CONFIG_FETCH_TIMEOUT_MS)
+  try {
+    const response = await fetch(url, { signal: controller.signal })
+    if (!response.ok) throw new Error(`Fetch failed: ${response.status}`)
+    return await response.json()
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
 async function getCachedJSON(url) {
   const kvAvailable = typeof KV !== 'undefined' && KV && typeof KV.get === 'function'
 
@@ -99,15 +126,11 @@ async function getCachedJSON(url) {
         await KV.delete(cacheKey)
       }
     }
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`Fetch failed: ${res.status}`)
-    const data = await res.json()
-    await KV.put(cacheKey, JSON.stringify(data), { expirationTtl: 1800 })   // 缓存十分钟
+    const data = await fetchJson(url)
+    await KV.put(cacheKey, JSON.stringify(data), { expirationTtl: CONFIG_CACHE_TTL_SECONDS })
     return data
   } else {
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`Fetch failed: ${res.status}`)
-    return await res.json()
+    return fetchJson(url)
   }
 }
 
@@ -121,10 +144,14 @@ async function logError(type, info) {
 }
 
 // ---------- 主逻辑 ----------
-async function handleRequest(request) {
+async function handleRequest(request, env) {
   // 快速处理 OPTIONS 请求
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
+  }
+
+  if (!['GET', 'HEAD', 'POST'].includes(request.method)) {
+    return errorResponse('Method not allowed', { allowed: ['GET', 'HEAD', 'POST', 'OPTIONS'] }, 405)
   }
 
   const reqUrl = new URL(request.url)
@@ -144,7 +171,7 @@ async function handleRequest(request) {
 
   // 通用代理请求处理
   if (targetUrlParam) {
-    return handleProxyRequest(request, targetUrlParam, currentOrigin)
+    return handleProxyRequest(request, targetUrlParam, currentOrigin, env)
   }
 
   // JSON 格式输出处理
@@ -157,42 +184,56 @@ async function handleRequest(request) {
 }
 
 // ---------- 代理请求处理子模块 ----------
-async function handleProxyRequest(request, targetUrlParam, currentOrigin) {
-  // 🚨 防止递归调用自身
-  if (targetUrlParam.startsWith(currentOrigin)) {
-    return errorResponse('Loop detected: self-fetch blocked', { url: targetUrlParam }, 400)
-  }
-
-  // 🚨 防止无效 URL
-  if (!/^https?:\/\//i.test(targetUrlParam)) {
-    return errorResponse('Invalid target URL', { url: targetUrlParam }, 400)
-  }
-
+async function handleProxyRequest(request, targetUrlParam, currentOrigin, env) {
   let fullTargetUrl = targetUrlParam
   const urlMatch = request.url.match(/[?&]url=([^&]+(?:&.*)?)/)
-  if (urlMatch) fullTargetUrl = decodeURIComponent(urlMatch[1])
+  if (urlMatch) {
+    try {
+      fullTargetUrl = decodeURIComponent(urlMatch[1])
+    } catch {
+      return errorResponse('Invalid URL encoding', {}, 400)
+    }
+  }
 
   let targetURL
   try {
     targetURL = new URL(fullTargetUrl)
   } catch {
-    await logError('proxy', { message: 'Invalid URL', url: fullTargetUrl })
-    return errorResponse('Invalid URL', { url: fullTargetUrl }, 400)
+    await logError('proxy', { message: 'Invalid URL' })
+    return errorResponse('Invalid URL', {}, 400)
+  }
+
+  if (targetURL.origin === currentOrigin) {
+    return errorResponse('Loop detected: self-fetch blocked', {}, 400)
+  }
+
+  let validationError
+  try {
+    validationError = await validateProxyTarget(targetURL, env, currentOrigin)
+  } catch (error) {
+    await logError('allowlist', { message: error.message })
+    return errorResponse('Unable to load proxy allowlist', {}, 503)
+  }
+  if (validationError) {
+    return errorResponse('Target URL is not allowed', { reason: validationError }, 403)
   }
 
   try {
+    const requestHeaders = pickForwardHeaders(request.headers)
     const proxyRequest = new Request(targetURL.toString(), {
       method: request.method,
-      headers: request.headers,
-      body: request.method !== 'GET' && request.method !== 'HEAD'
-        ? await request.arrayBuffer()
-        : undefined,
+      headers: requestHeaders,
+      body: request.method === 'POST' ? request.body : undefined,
     })
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 9000)
-    const response = await fetch(proxyRequest, { signal: controller.signal })
-    clearTimeout(timeoutId)
+    let response
+    try {
+      response = await fetchWithSafeRedirects(proxyRequest, env, controller.signal, currentOrigin)
+    } finally {
+      clearTimeout(timeoutId)
+    }
 
     const responseHeaders = new Headers(CORS_HEADERS)
     for (const [key, value] of response.headers) {
@@ -207,13 +248,137 @@ async function handleProxyRequest(request, targetUrlParam, currentOrigin) {
       headers: responseHeaders
     })
   } catch (err) {
-    await logError('proxy', { message: err.message || '代理请求失败', url: fullTargetUrl })
+    const safeTarget = redactUrl(fullTargetUrl)
+    await logError('proxy', { message: err.message || '代理请求失败', url: safeTarget })
     return errorResponse('Proxy Error', {
       message: err.message || '代理请求失败',
-      target: fullTargetUrl,
+      target: safeTarget,
       timestamp: new Date().toISOString()
     }, 502)
   }
+}
+
+function pickForwardHeaders(headers) {
+  const safeHeaders = new Headers()
+  for (const [key, value] of headers) {
+    if (FORWARDED_REQUEST_HEADERS.has(key.toLowerCase())) safeHeaders.set(key, value)
+  }
+  return safeHeaders
+}
+
+function redactUrl(value) {
+  try {
+    const url = new URL(value)
+    for (const key of url.searchParams.keys()) {
+      if (/token|key|auth|sign|password|secret/i.test(key)) url.searchParams.set(key, '[REDACTED]')
+    }
+    url.username = ''
+    url.password = ''
+    return url.toString()
+  } catch {
+    return '[invalid URL]'
+  }
+}
+
+function isPrivateHostname(hostname) {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '')
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) {
+    return true
+  }
+
+  if (host.includes(':')) {
+    return host === '::' || host === '::1' || host.startsWith('::ffff:') ||
+      host.startsWith('fc') || host.startsWith('fd') || /^fe[89ab]/.test(host)
+  }
+
+  const parts = host.split('.').map(Number)
+  if (parts.length !== 4 || parts.some(part => !Number.isInteger(part) || part < 0 || part > 255)) return false
+
+  const [a, b] = parts
+  return a === 0 || a === 10 || a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    a >= 224
+}
+
+function unwrapProxyUrl(value) {
+  let current = value
+  for (let depth = 0; depth < 3; depth++) {
+    const parsed = new URL(current)
+    const nested = parsed.searchParams.get('url')
+    if (!nested) return parsed
+    current = nested
+  }
+  return new URL(current)
+}
+
+async function getConfiguredSourceHosts() {
+  const now = Date.now()
+  if (allowedHostsCache.hosts && allowedHostsCache.expiresAt > now) return allowedHostsCache.hosts
+
+  const config = await getCachedJSON(JSON_SOURCES.full)
+  const hosts = new Set()
+  for (const source of Object.values(config.api_site || {})) {
+    try {
+      hosts.add(unwrapProxyUrl(source.api).hostname.toLowerCase())
+    } catch {
+      // 无效来源会由仓库的 verify.js 报告，这里直接忽略。
+    }
+  }
+  allowedHostsCache = { hosts, expiresAt: now + ALLOWED_HOSTS_CACHE_MS }
+  return hosts
+}
+
+function hostMatchesRule(hostname, rule) {
+  const normalizedRule = rule.trim().toLowerCase()
+  if (!normalizedRule) return false
+  if (normalizedRule.startsWith('*.')) {
+    const suffix = normalizedRule.slice(1)
+    return hostname.endsWith(suffix) && hostname.length > suffix.length
+  }
+  return hostname === normalizedRule
+}
+
+async function validateProxyTarget(targetURL, env, blockedOrigin = null) {
+  if (!['http:', 'https:'].includes(targetURL.protocol)) return '仅支持 HTTP(S)'
+  if (blockedOrigin && targetURL.origin === blockedOrigin) return '禁止代理服务递归调用自身'
+  if (targetURL.username || targetURL.password) return 'URL 不得包含账号或密码'
+  if (targetURL.port && !['80', '443'].includes(targetURL.port)) return '仅允许 80 与 443 端口'
+  if (isPrivateHostname(targetURL.hostname)) return '禁止访问本机或私有网络'
+
+  const hostname = targetURL.hostname.toLowerCase()
+  const extraRules = String(env.PROXY_ALLOWED_HOSTS || '')
+    .split(',')
+    .map(rule => rule.trim())
+    .filter(Boolean)
+
+  if (extraRules.includes('*')) return null
+  if (extraRules.some(rule => hostMatchesRule(hostname, rule))) return null
+
+  const configuredHosts = await getConfiguredSourceHosts()
+  if (configuredHosts.has(hostname)) return null
+  return '目标主机不在配置来源或 PROXY_ALLOWED_HOSTS 白名单中'
+}
+
+async function fetchWithSafeRedirects(request, env, signal, blockedOrigin, redirectCount = 0) {
+  const response = await fetch(request, { signal, redirect: 'manual' })
+  const location = response.headers.get('location')
+  if (![301, 302, 303, 307, 308].includes(response.status) || !location) return response
+
+  if (redirectCount >= MAX_REDIRECTS) throw new Error('Too many redirects')
+  const redirectURL = new URL(location, request.url)
+  const validationError = await validateProxyTarget(redirectURL, env, blockedOrigin)
+  if (validationError) throw new Error(`Unsafe redirect blocked: ${validationError}`)
+
+  const method = [303].includes(response.status) ? 'GET' : request.method
+  const redirectedRequest = new Request(redirectURL.toString(), {
+    method,
+    headers: request.headers,
+    body: method === 'POST' ? request.body : undefined,
+  })
+  return fetchWithSafeRedirects(redirectedRequest, env, signal, blockedOrigin, redirectCount + 1)
 }
 
 // ---------- JSON 格式输出处理子模块 ----------
@@ -224,7 +389,15 @@ async function handleFormatRequest(formatParam, sourceParam, prefixParam, defaul
       return errorResponse('Invalid format parameter', { format: formatParam }, 400)
     }
 
-    const selectedSource = JSON_SOURCES[sourceParam] || JSON_SOURCES['full']
+    if (sourceParam && !Object.hasOwn(JSON_SOURCES, sourceParam)) {
+      return errorResponse('Invalid source parameter', { source: sourceParam }, 400)
+    }
+
+    if (prefixParam && !/^https?:\/\//i.test(prefixParam)) {
+      return errorResponse('Invalid prefix parameter', { prefix: prefixParam }, 400)
+    }
+
+    const selectedSource = JSON_SOURCES[sourceParam || 'full']
     const data = await getCachedJSON(selectedSource)
     
     const newData = config.proxy
@@ -270,10 +443,10 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
 </head>
 <body>
   <h1>🔄 API 中转代理服务</h1>
-  <p>通用 API 中转代理，用于访问被墙或限制的接口。</p>
+  <p>配置来源 API 中转代理，默认仅允许已登记或明确加入白名单的公网接口。</p>
   
   <h2>使用方法</h2>
-  <p>中转任意 API：在请求 URL 后添加 <code>?url=目标地址</code> 参数</p>
+  <p>中转已允许的 API：在请求 URL 后添加 <code>?url=目标地址</code> 参数</p>
   <pre>${defaultPrefix}<示例API地址></pre>
   
   <h2>配置订阅参数说明</h2>
@@ -327,8 +500,10 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
   
   <h2>支持的功能</h2>
   <ul>
-    <li>✅ 支持 GET、POST、PUT、DELETE 等所有 HTTP 方法</li>
-    <li>✅ 自动转发请求头和请求体</li>
+    <li>✅ 默认仅支持 GET、HEAD 与 OPTIONS</li>
+    <li>✅ 仅转发必要且安全的请求头</li>
+    <li>✅ 默认仅代理配置内的来源，可用 PROXY_ALLOWED_HOSTS 扩充</li>
+    <li>✅ 阻挡本机、私有网络与不安全跳转</li>
     <li>✅ 保留原始响应头（除敏感信息）</li>
     <li>✅ 完整的 CORS 支持</li>
     <li>✅ 超时保护（9 秒）</li>
@@ -352,7 +527,11 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
 
   return new Response(html, { 
     status: 200, 
-    headers: { 'Content-Type': 'text/html; charset=utf-8', ...CORS_HEADERS } 
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'",
+      ...CORS_HEADERS,
+    }
   })
 }
 

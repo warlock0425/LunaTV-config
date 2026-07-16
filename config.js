@@ -67,7 +67,7 @@ const API_SITES = {
       api: 'https://cj.lzcaiji.com/api.php/provide/vod',
       detail: 'https://cj.lzcaiji.com',
     },
-    360zycom: {
+    '360zycom': {
       name: '🎬360 资源',
       api: 'https://360zy.com/api.php/provide/vod',
       detail: 'https://360zy.com',
@@ -167,12 +167,12 @@ const API_SITES = {
       api: 'https://pz.berserk.qzz.io/?url=https://lovedan.net/api.php/provide/vod',
       detail: 'https://lovedan.net',
     },
-    91mdme: {
+    '91mdme': {
       name: '🔞麻豆视频',
       api: 'https://91md.me/api.php/provide/vod',
       detail: 'https://91md.me',
     },
-    91jpzywcom: {
+    '91jpzywcom': {
       name: '🔞91-精品-',
       api: 'https://91jpzyw.com/api.php/provide/vod',
       detail: 'https://91jpzyw.com',
@@ -192,12 +192,12 @@ const API_SITES = {
       api: 'https://api.souavzy.vip/api.php/provide/vod',
       detail: 'https://api.souavzy.vip',
     },
-    155zy2com: {
+    '155zy2com': {
       name: '🔞155-资源',
       api: 'https://155api.com/api.php/provide/vod',
       detail: 'https://155zy2.com',
     },
-    apiyutu.com: {
+    'apiyutu.com': {
       name: '🔞玉兔资源',
       api: 'https://apiyutu.com/api.php/provide/vod',
       detail: 'https://apiyutu.com',
@@ -297,7 +297,6 @@ const API_SITES = {
         name: '空内容测试源',
         adult: true
     },
-    }
     //ARCHIVE https://telegra.ph/APIs-08-12
 };
 
