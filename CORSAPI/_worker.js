@@ -14,8 +14,8 @@ export default {
 // 常量配置（避免重复创建）
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Accept, Content-Type, Range, Authorization, Token, X-Requested-With',
+  'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+  'Access-Control-Allow-Headers': 'Accept, Content-Type, Range, X-Requested-With',
   'Access-Control-Max-Age': '86400',
   'Referrer-Policy': 'no-referrer',
   'X-Content-Type-Options': 'nosniff',
@@ -29,7 +29,7 @@ const EXCLUDE_HEADERS = new Set([
 const FORWARDED_REQUEST_HEADERS = new Set([
   'accept', 'accept-language', 'content-type', 'if-modified-since',
   'if-none-match', 'range', 'user-agent',
-  'referer', 'origin', 'authorization', 'token', 'x-requested-with'
+  'referer', 'origin', 'x-requested-with'
 ])
 
 const CONFIG_CACHE_TTL_SECONDS = 1800
@@ -150,8 +150,8 @@ async function handleRequest(request, env) {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
   }
 
-  if (!['GET', 'HEAD', 'POST'].includes(request.method)) {
-    return errorResponse('Method not allowed', { allowed: ['GET', 'HEAD', 'POST', 'OPTIONS'] }, 405)
+  if (!['GET', 'HEAD'].includes(request.method)) {
+    return errorResponse('Method not allowed', { allowed: ['GET', 'HEAD', 'OPTIONS'] }, 405)
   }
 
   const reqUrl = new URL(request.url)
@@ -223,7 +223,6 @@ async function handleProxyRequest(request, targetUrlParam, currentOrigin, env) {
     const proxyRequest = new Request(targetURL.toString(), {
       method: request.method,
       headers: requestHeaders,
-      body: request.method === 'POST' ? request.body : undefined,
     })
 
     const controller = new AbortController()
@@ -372,11 +371,10 @@ async function fetchWithSafeRedirects(request, env, signal, blockedOrigin, redir
   const validationError = await validateProxyTarget(redirectURL, env, blockedOrigin)
   if (validationError) throw new Error(`Unsafe redirect blocked: ${validationError}`)
 
-  const method = [303].includes(response.status) ? 'GET' : request.method
+  const method = response.status === 303 ? 'GET' : request.method
   const redirectedRequest = new Request(redirectURL.toString(), {
     method,
     headers: request.headers,
-    body: method === 'POST' ? request.body : undefined,
   })
   return fetchWithSafeRedirects(redirectedRequest, env, signal, blockedOrigin, redirectCount + 1)
 }
